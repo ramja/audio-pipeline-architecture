@@ -1,0 +1,38 @@
+
+postgres:
+  build: docker-images/postgres
+  ports:
+    - "5432:5432"
+  volumes_from:
+    - data
+  env_file: .env
+
+
+luigid:
+  build: docker-images/luigid
+  ports:
+    - "8082:8082"
+  volumes:
+    - /usr/local/lib/python3.4/site-packages/luigi/static/visualiser
+
+luigi_worker:
+  build: docker-images/luigi_worker
+  links:
+    - luigid:luigid
+    - postgres:postgres
+  env_file: .env
+  #command: make deploy
+  volumes_from:
+    - datalake
+
+data:
+  build: docker-images/data
+  volumes:
+    - /data
+
+datalake:
+  build: docker-images/datalake
+  volumes:
+    - /home/ramja/ssd/datalake:/datalake
+
+
