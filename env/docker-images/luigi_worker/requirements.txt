@@ -1,11 +1,7 @@
-matplotlib
-plotly
-awscli
-boto
 luigi
-psycopg2
-numpy
-pandas
-scikit-learn
+psycopg2-binary
+sqlalchemy
+google-cloud-speech
+boto
 
 
