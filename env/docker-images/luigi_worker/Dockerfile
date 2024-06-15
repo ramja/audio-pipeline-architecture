@@ -18,7 +18,7 @@ RUN apt-get install -y rng-tools
 
 #RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 RUN apt-get update && \
-  apt-get install -yq --fix-missing --force-yes  build-essential wget ssh python3 libpq-dev python3.10-dev python3-pip curl libpulse-dev libasound2 sox libsox-fmt-mp3 lame
+  apt-get install -yq --fix-missing --force-yes  build-essential wget ssh python3 gfortran libglpk40 libpq-dev python3.10-dev python3-pip curl libpulse-dev libasound2 sox libsox-fmt-mp3 lame
 #RUN apt-get install -yq libboost-tools-dev libboost-graph-dev libboost-python-dev libboost-thread-dev libboost-system-dev libboost-regex-dev  libboost-iostreams-dev libcairomm-1.0-dev
 
 RUN pip install --upgrade pip
@@ -67,7 +67,7 @@ ENV PATH $PATH:$JAVA_HOME/bin
 
 WORKDIR /usr/bin
 
-RUN Rscript -e "install.packages(c('igraph','dplyr','tidyr','seqHMM','igraph','cluster' ,'randomForest','lme4', 'BradleyTerry2', 'car', 'caret') )"
+RUN Rscript -e "install.packages(c('igraph','dplyr','tidyr','seqHMM','cluster' ,'randomForest','lme4', 'BradleyTerry2', 'car', 'caret') )"
 #RUN Rscript -e "install.packages('cluster')"
 #RUN Rscript -e "install.packages('caret')"
 RUN Rscript -e "install.packages('devtools')" -e "devtools:::install_github('usagi5886/PraatR')"

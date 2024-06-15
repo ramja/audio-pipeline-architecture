@@ -120,7 +120,7 @@ getProsodicData <- function(fileName) {
   
   # For this example, let's pull out all candidates that are ranked first and determine their frequency and strength values
   # First, make a vector of the line numbers that say 'candidate [1]'
-  FirstCandidateLines = which(FullText == "            candidate [1]:")
+  FirstCandidateLines = which(FullText == "            candidates [1]:")
   
   # Immediately following each of these lines is the line with information on that candidate's frequency (F0)
   FrequencyLines = FullText[FirstCandidateLines + 1]

@@ -1,8 +1,7 @@
 # encoding=utf8  
 import sys  
 
-reload(sys)  
-sys.setdefaultencoding('utf8')
+
 
 import os
 
@@ -16,13 +15,14 @@ logger = logging.getLogger('dpa.pipeline.etl2')
 
 import luigi
 from luigi import configuration, LocalTarget
-from luigi.s3 import S3Target, S3Client, S3FlagTarget, ReadableS3File
+
 #from luigi.contrib.spark import SparkSubmitTask, PySparkTask
-import luigi.postgres
+import luigi.contrib.postgres
 from luigi.contrib.external_program import ExternalProgramTask
 import os
-from luigi.postgres import PostgresQuery
+from luigi.contrib.postgres import PostgresQuery
 import psycopg2
+from pathlib import Path
 
 
 
@@ -63,7 +63,7 @@ class UpdatePrediction(luigi.Task):
         try:
             conn = psycopg2.connect("dbname='dpa' user='dpa-user' host='postgres' password='dpa-test'")
         except:
-           print "I am unable to connect to the database"
+           print("I am unable to connect to the database")
         cur = conn.cursor()
         query = "update file_register set  prediction = {},  where id = {}".format(self.proba1,self.requires().idReg)
         cur.execute(query)
@@ -132,6 +132,23 @@ class ConverGraph(ExternalProgramTask):
         return ExtractData(listing = self.listing, idReg=-1)
   
 
+class Plot(ExternalProgramTask):
+    listing = luigi.DateMinuteParameter(default=datetime.date.today())
+    idReg = luigi.IntParameter(default=0)
+
+    def output(self):
+        return luigi.LocalTarget("/datalake/plot/{}.dat".format(self.requires().idReg))
+
+    def program_args(self):
+        self.idReg=self.requires().idReg
+        self.prediction=0.10
+        args = ["bash", "plot.sh", self.requires().idReg]
+        return args
+
+    def requires(self):
+        return ExtractData(listing = self.listing, idReg=-1)
+    
+
 
 class ExtractData(ExternalProgramTask):
     listing = luigi.DateMinuteParameter(default=datetime.date.today())
@@ -147,9 +164,23 @@ class ExtractData(ExternalProgramTask):
         return args
 
     def requires(self):
-        return MakeGraph(listing = self.listing, idReg=-1)
+        return Diarize(listing = self.listing, idReg=-1)
     
 
+class Diarize(ExternalProgramTask):
+    listing = luigi.DateMinuteParameter(default=datetime.date.today())
+    idReg = luigi.IntParameter(default=0)
+
+    def output(self):
+        return luigi.LocalTarget("/datalake/diar/{}.diar".format(self.requires().idReg))
+
+    def program_args(self):
+        self.idReg=self.requires().idReg
+        args = ["bash", "diarize.sh", self.requires().idReg]
+        return args
+
+    def requires(self):
+        return MakeGraph(listing = self.listing, idReg=-1)
 
 class MakeGraph(ExternalProgramTask):
     listing = luigi.DateMinuteParameter(default=datetime.date.today())
@@ -167,15 +198,15 @@ class MakeGraph(ExternalProgramTask):
         return Resample(listing = self.listing, idReg=-1)
 
 class Resample(ExternalProgramTask):
-    listing = luigi.DateMinuteParameter(default=datetime.date.today())
+    listing = luigi.DateMinuteParameter(default=datetime.datetime.now())
     idReg = luigi.IntParameter(default=0)
 
     def output(self):
-        return luigi.LocalTarget("/datalake/resample/{}.wav".format(self.requires().idReg))
+        return luigi.LocalTarget("/datalake/resample/{}.wav".format(self.idReg))
 
     def program_args(self):
-        self.idReg=self.requires().idReg
-        args = ["bash", "resample.sh", self.requires().idReg]
+        self.idReg=Path(self.input().path).stem
+        args = ["bash", "resample.sh", self.idReg]
         return args
 
     def requires(self):
@@ -195,7 +226,7 @@ class ReadFiles(ExternalProgramTask):
     def requires(self):
         return RegisterFile(listing = self.listing)    
 
-class QueryId(luigi.postgres.PostgresQuery):
+class QueryId(luigi.contrib.postgres.PostgresQuery):
     listing = luigi.DateMinuteParameter(default=datetime.date.today())
     idReg = luigi.IntParameter(default=0)
 
@@ -223,11 +254,23 @@ class MarkId(luigi.Task):
 
     def run(self):
 
+        connection = self.output().connect()
+        cursor = connection.cursor()
+        sql = self.query
 
+        cursor.execute(sql)
+
+        for row in cursor.fetchall():
+            self.rows.append(row)
+
+        self.output().touch(connection)
+
+        connection.commit()
+        connection.close()
         try:
             conn = psycopg2.connect("dbname='dpa' user='dpa-user' host='postgres' password='dpa-test'")
         except:
-           print "I am unable to connect to the database"
+           print("I am unable to connect to the database")
 
         cur = conn.cursor()
 
@@ -241,7 +284,6 @@ class MarkId(luigi.Task):
             for row in rows:
                 self.idReg = row[0]
         self.fileName = row[1]
-        print self.fileName
         os.rename("/datalake/regs/{}".format(row[1]),"/datalake/regs/{}.mp3".format(row[0]))
         out_file.write('{}\t{}\n'.format(
                         row[0],
@@ -250,13 +292,12 @@ class MarkId(luigi.Task):
     # renaming directory ''tutorialsdir"
 
 class ReadId(luigi.Task):
-
-    listing = luigi.DateMinuteParameter(default=datetime.date.today())
+    listing = luigi.DateMinuteParameter(default=datetime.datetime.now())
     idReg = luigi.IntParameter(default=0)
     fileName = luigi.Parameter(default="error")
+
     def output(self):
-        return luigi.LocalTarget('/datalake/logs/{}_{}_{}T{}{}.log'.format(self.listing.day, self.listing.month, self.listing.year,
-                    self.listing.hour,self.listing.minute))
+        return luigi.LocalTarget("/datalake/regs/{}.mp3".format(self.idReg))
 
 
     def run(self):
@@ -265,21 +306,22 @@ class ReadId(luigi.Task):
             cur = conn.cursor()
             cur.execute("""select * from  file_register  where estado = 'R' LIMIT 1""")
             rows = cur.fetchall()
-            with self.output().open('w') as out_file:
-                for row in rows:
-                    self.idReg = row[0]
-                    self.fileName = row[1]
-            print self.fileName
-            os.rename("/datalake/regs/{}".format(row[1]),"/datalake/regs/{}.mp3".format(row[0]))
-            out_file.write('{}\t{}\n'.format(row[0], row[1]))
-            query = "update file_register set  estado = 'I' where id = {}".format(self.idReg)
-            cur.execute(query)
+            for row in rows:
+                self.idReg = row[0]
+                self.fileName = row[1]
+            #print(self.fileName)
+            os.rename("/datalake/regs/{}".format(self.fileName),"/datalake/regs/{}.mp3".format(self.idReg))
+            #with self.output().open("w") as out_file:
+            #    out_file.write('{}\t{}\n'.format(self.idReg, self.fileName))
+            new_query = "update file_register set  estado = 'I' where id = {}".format(self.idReg)
+            cur.execute(new_query)
 
-            #conn.commit()
+            conn.commit()
             cur.close ()
-        except:
-           print "I am unable to connect to the database"
-
+        except Exception as e:
+            with self.output().open("w") as out_file:
+                out_file.write("I am unable to connect to the database" + str(e))
+            raise Exception("Error al actualizar registro")
 
 
 

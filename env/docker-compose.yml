@@ -21,10 +21,16 @@ services:
     volumes:
       - /usr/local/lib/python3.10/site-packages/luigi/static/visualiser
     environment:
+      LC_ALL: C.UTF-8
+      POSTGRES_USER: dpa-user
+      POSTGRES_PASSWORD: dpa-test
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: dpa
       LUIGI_TASK_HISTORY_DB_CONNECTION: postgres://dpa-user@postgres/dpa
       LUIGI_SCHEDULER_RECORD_TASK_HISTORY: "true"
     depends_on:
       - postgres
+
 
   luigi_worker:
     build: docker-images/luigi_worker
@@ -41,7 +47,7 @@ services:
       PGDATA: /data/db/data
     #command: make deploy
     volumes:
-      - datalake:/datalake
+      - coop-audio:/datalake
 
 volumes:
    data:
@@ -50,12 +56,9 @@ volumes:
        type: none
        device: /home/jose_antonio_ramirez/data
        o: bind
-
-   datalake:
-     driver: local # Define the driver and options under the volume name
+   coop-audio:
+     driver: ofekmeister/gcsfs
      driver_opts:
-       type: none
-       device: /home/jose_antonio_ramirez/datalake
-       o: bind
+       key: verdant-branch-401919-f616c4765daf.json
 
 

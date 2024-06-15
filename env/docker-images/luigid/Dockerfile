@@ -1,4 +1,10 @@
 FROM python:3.10
+RUN apt-get update && apt-get install -q -y --no-install-recommends \
+        sudo cron libpq-dev build-essential \
+        postgresql-client \
+    && \
+     echo "dpa-user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 ADD requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
@@ -15,12 +21,4 @@ EXPOSE 8082
 
 RUN mkdir /etc/luigi
 ADD luigi.cfg /etc/luigi/luigi.cfg
-ADD scripts/wait-for-postgres.sh /tmp/wait-for-postgress.sh 
-
-RUN  apt-get install -q -y --no-install-recommends \
-        sudo cron python-dev libpq-dev build-essential \
-        postgresql-client \
-    && \
-     echo "dpa-user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-USER dpa-user
+CMD ["/usr/local/bin/luigid"]
